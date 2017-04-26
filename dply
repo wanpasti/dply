@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+
+
+import requests
+import re
+import time
+import argparse
+import configparser
+import bs4
+
+from dply_constants import *
+
+config = configparser.ConfigParser()
+config.read("dply.conf")
+
+useragent_string = config.get("dply", "useragent")
+cookie_rack_session = config.get("dply", "cookie_rack.session", raw=True)
+pub_sshkey = config.get("dply", "pub_sshkey", raw=True)
+
+headers["User-Agent"] = useragent_string
+post_headers["User-Agent"] = useragent_string
+cookies["rack.session"] = cookie_rack_session
+data["key"] = pub_sshkey
+
+def create(args):
+  data["servername"] = args.name
+  data["os"] = args.os
+  data["region"] = args.region
+  print("Trying to create one {} server at {}..".format(os_names[data["os"]], regions[data["region"]]))
+  r = requests.post(create_link, data, cookies=cookies, headers=post_headers)
+  print(r)
+
+
+def info(args):
+  r = requests.get(dashrel_link, cookies=cookies, headers=headers)
+  if re.search(r"No Servers Yet", r.text):
+    print("No servers yet")
+    return None
+
+  while 1:
+    if re.search(r"Building Server", r.text):
+      if args.wait:
+        time.sleep(1)
+        r = requests.get(dashrel_link, cookies=cookies, headers=headers)
+      else:
+        print("Building server")
+        return None
+    else:
+      break
+
+  print(r)
+
+  soup = bs4.BeautifulSoup(r.text, "lxml")
+  region = soup.select("img.region_flag")[0]["alt"].strip()
+  time_rem = soup.select("div.col.s12.center-align.remain.grey-text")[0].text.strip()
+  os_ip = soup.select("div.col.s12.grey.darken-4.grey-text")[0].text.strip()
+  os_name = re.search(r"(^.*) -", os_ip).group(1)
+  ip_addr = re.search(r"- (.*)$", os_ip).group(1)
+  expire_link = soup.select("a.white-text")[0]["href"]
+  server_id = re.search(r"/expirenow/(.*)$", expire_link).group(1)
+
+  print(region)
+  print(time_rem)
+  print(os_name)
+  print(ip_addr)
+  print(server_id)
+
+  return server_id
+
+def kill(args):
+  server_id = info(args)
+  if server_id is not None:
+    r = requests.post(expire_link.format(server_id), {"action": ""}, cookies=cookies, headers=post_headers)
+    print(r)
+
+def list_constants(*args):
+  if args[0].region:
+    for k in regions:
+      print(k, ":", regions[k])
+  elif args[0].os:
+    for k in os_names:
+      print(k, ":", os_names[k])
+
+
+if __name__ == "__main__":
+  parser = argparse.ArgumentParser(description="Script to create or kill a free dply.co server")
+  sub_parser = parser.add_subparsers(dest="dply action")
+  sub_parser.required = True
+
+  sp_c = sub_parser.add_parser("create", help="Create a server")
+  sp_c.add_argument("-n", "--name", default="gvs", type=str, help="Pick a server name")
+  sp_c.add_argument("-r", "--region", default="nyc1", type=str, help="Pick a region")
+  sp_c.add_argument("-o", "--os", default="ubuntu-16-04-x64", type=str, help="Pick an OS")
+  sp_c.set_defaults(func=create)
+
+  sp_i = sub_parser.add_parser("info", help="Info of server")
+  sp_i.add_argument("-w", "--wait", action="store_true", help="wait if building")
+  sp_i.set_defaults(func=info)
+
+  sp_k = sub_parser.add_parser("kill", help="Kill server")
+  sp_k.add_argument("-w", "--wait", action="store_true", help="wait if building")
+  sp_k.set_defaults(func=kill)
+
+  sp_l = sub_parser.add_parser("list", help="list items")
+  t = sp_l.add_mutually_exclusive_group(required=True)
+  t.add_argument("-r", "--region", action="store_true", help="list regions")
+  t.add_argument("-o", "--os", action="store_true", help="list os names")
+  sp_l.set_defaults(func=list_constants)
+
+  args = parser.parse_args()
+
+  args.func(args)
