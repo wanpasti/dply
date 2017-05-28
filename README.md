@@ -1,5 +1,7 @@
 # create free server in dply.co from terminal
 
+**dply started to use reCAPTCHA, rendering this tool useless (for now)**
+
 - Use `dply -h/--help` to get help about the options.
 - Use `dply list` to get lists of OS and region codes.
 

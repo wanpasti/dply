@@ -15,11 +15,13 @@ config.read("dply.conf")
 
 useragent_string = config.get("dply", "useragent")
 cookie_rack_session = config.get("dply", "cookie_rack.session", raw=True)
+ext_name = config.get("dply", "ext_name", raw=True)
 pub_sshkey = config.get("dply", "pub_sshkey", raw=True)
 
 headers["User-Agent"] = useragent_string
 post_headers["User-Agent"] = useragent_string
 cookies["rack.session"] = cookie_rack_session
+cookies["ext_name"] = ext_name
 data["key"] = pub_sshkey
 
 def create(args):
